@@ -28,7 +28,7 @@
     }
   ],
   "host_permissions": [
-    "https://api.groq.com/*"
+    "https://ai-summarizer-proxy-ebon.vercel.app/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
