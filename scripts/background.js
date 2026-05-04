@@ -9,7 +9,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function summarizeText(text, length) {
-  const ENDPOINT = 'https://ai-summarizer-proxy-ebon.vercel.app/api/summarize';
+  const ENDPOINT = 'https://ai-summarizer-proxy-alpha.vercel.app/api/summarize';
 
   const response = await fetch(ENDPOINT, {
     method: 'POST',
