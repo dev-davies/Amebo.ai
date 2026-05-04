@@ -63,23 +63,32 @@ document.addEventListener('DOMContentLoaded', () => {
     summaryOutput.appendChild(ul);
   }
 
-  function parseBullets(markdown) {
-    return markdown
-      .split('\n')
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => l.match(/^[-*]\s+(.*)$/))
-      .filter(Boolean)
-      .map(m => m[1]);
+  function cleanBullet(s) {
+    return String(s)
+      .replace(/^[\s\u2022•*\-]+/, '')
+      .replace(/^\d+[\.\):\-]\s*/, '')
+      .trim();
+  }
+
+  function toBullets(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.flatMap(toBullets);
+    }
+    if (typeof value !== 'string') return [];
+    const lines = value.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    const marked = lines.filter(l => /^([-*•]|\d+[\.\):\-])\s+/.test(l));
+    const source = marked.length ? marked : lines;
+    return source.map(cleanBullet).filter(Boolean);
   }
 
   function renderPayload(payload) {
     summaryOutput.replaceChildren();
 
-    const bullets = payload.summary ? parseBullets(payload.summary) : [];
+    const bullets = toBullets(payload.summary);
     if (bullets.length) {
       appendSection('Summary', bullets);
-    } else if (payload.summary) {
+    } else if (typeof payload.summary === 'string' && payload.summary.trim()) {
       const p = document.createElement('p');
       p.textContent = payload.summary;
       summaryOutput.appendChild(p);
