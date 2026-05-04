@@ -151,6 +151,14 @@ button {
   border: 1px solid var(--border-color);
 }
 
+.placeholder-text {
+  color: #777;
+  text-align: center;
+  font-size: 0.85rem;
+  margin: 10px 0;
+  font-weight: 500;
+}
+
 .summary-content ul {
   margin: 0;
   padding-left: 20px;

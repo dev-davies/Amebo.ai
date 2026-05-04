@@ -28,9 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 2. Summarize Click
   summarizeBtn.addEventListener('click', async () => {
-    initialState.classList.add('hidden');
-    loadingDiv.classList.remove('hidden');
     summarizeBtn.disabled = true;
+    summaryOutput.innerHTML = ''; // Clear placeholder or previous results
+    loadingDiv.classList.remove('hidden');
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -63,10 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 3. Reset Button
   resetBtn.addEventListener('click', () => {
-    resultState.classList.add('hidden');
-    initialState.classList.remove('hidden');
+    document.getElementById('result-actions').classList.add('hidden');
+    summarizeBtn.classList.remove('hidden');
     summarizeBtn.disabled = false;
-    summaryOutput.innerHTML = '';
+    summaryOutput.innerHTML = '<p class="placeholder-text">Click the button above to generate your 3-point summary!</p>';
     currentSummary = '';
   });
 
@@ -82,10 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function displaySummary(markdown) {
     currentSummary = markdown;
     loadingDiv.classList.add('hidden');
-    resultState.classList.remove('hidden');
+    document.getElementById('result-actions').classList.remove('hidden');
     
     // Simple Markdown to HTML converter for bullet points
-    // Replaces lines starting with - or * with <li> tags wrapped in <ul>
     const htmlContent = markdown
       .replace(/^\s*[-*]\s+(.*)$/gm, '<li>$1</li>')
       .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
@@ -95,8 +94,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function handleError(message) {
     loadingDiv.classList.add('hidden');
-    initialState.classList.remove('hidden');
     summarizeBtn.disabled = false;
+    summaryOutput.innerHTML = '<p class="placeholder-text">Click the button above to generate your 3-point summary!</p>';
     alert(message);
   }
 });
