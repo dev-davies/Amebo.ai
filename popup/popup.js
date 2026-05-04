@@ -13,8 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const readingTimeDiv = document.getElementById('reading-time');
   const pageTitleDiv = document.getElementById('page-title');
   const errorBanner = document.getElementById('error-banner');
+  const warningBanner = document.getElementById('warning-banner');
 
   const PLACEHOLDER_TEXT = 'Click the button above to generate your summary!';
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const MAX_CACHE_ENTRIES = 30;
   let currentPayload = null; // { summary, insights, highlights, words }
   let currentTabId = null;
   let currentUrl = null;
@@ -27,6 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearError() {
     errorBanner.textContent = '';
     errorBanner.classList.add('hidden');
+  }
+  function showWarning(message) {
+    warningBanner.textContent = message;
+    warningBanner.classList.remove('hidden');
+  }
+  function clearWarning() {
+    warningBanner.textContent = '';
+    warningBanner.classList.add('hidden');
   }
 
   function resetPlaceholder() {
@@ -130,16 +141,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const cacheKey = (url, length) => `summary:${length}:${url}`;
+
   async function getCached(url, length) {
     const key = cacheKey(url, length);
     const data = await chrome.storage.local.get(key);
-    return data[key];
+    const entry = data[key];
+    if (!entry) return null;
+    if (entry.ts && Date.now() - entry.ts > CACHE_TTL_MS) {
+      await chrome.storage.local.remove(key);
+      return null;
+    }
+    return entry;
   }
+
+  async function evictIfNeeded() {
+    const all = await chrome.storage.local.get(null);
+    const entries = Object.entries(all).filter(([k]) => k.startsWith('summary:'));
+    if (entries.length <= MAX_CACHE_ENTRIES) return;
+    entries.sort((a, b) => (a[1]?.ts || 0) - (b[1]?.ts || 0));
+    const toRemove = entries.slice(0, entries.length - MAX_CACHE_ENTRIES).map(([k]) => k);
+    if (toRemove.length) await chrome.storage.local.remove(toRemove);
+  }
+
   async function setCached(url, length, payload) {
     await chrome.storage.local.set({
       [cacheKey(url, length)]: { ...payload, ts: Date.now() }
     });
+    await evictIfNeeded();
   }
+
   async function clearCachedAll(url) {
     const all = await chrome.storage.local.get(null);
     const toRemove = Object.keys(all).filter(k => k.startsWith('summary:') && k.endsWith(`:${url}`));
@@ -206,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Summarize
   summarizeBtn.addEventListener('click', async () => {
     clearError();
+    clearWarning();
     summarizeBtn.disabled = true;
     summaryOutput.replaceChildren();
     loadingDiv.classList.remove('hidden');
@@ -229,6 +260,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const extraction = await sendToContent(currentTabId, { action: 'GET_TEXT' });
       if (!extraction || !extraction.text) {
         throw new Error('No content received. Please refresh and try again.');
+      }
+
+      if (extraction.truncated) {
+        const original = extraction.originalLength || 0;
+        showWarning(`Page is long (${original.toLocaleString()} chars) — only the first 10,000 were sent for summarization.`);
       }
 
       const words = extraction.text.trim().split(/\s+/).length;
@@ -258,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reset
   resetBtn.addEventListener('click', async () => {
     clearError();
+    clearWarning();
     resultActions.classList.add('hidden');
     resultMeta.classList.add('hidden');
     summarizeBtn.disabled = false;

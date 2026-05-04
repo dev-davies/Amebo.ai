@@ -281,3 +281,19 @@ button:focus-visible,
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }
+
+.primary-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -3px;
+  box-shadow: 0 0 0 2px var(--accent-color);
+}
+
+.warning-banner {
+  background: #fff8e6;
+  border: 1px solid #f5d97a;
+  color: #7a5b00;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

@@ -17,9 +17,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       content = document.body.innerText;
     }
 
-    const cleanedText = content.replace(/\s+/g, ' ').trim().substring(0, 10000);
+    const MAX_CHARS = 10000;
+    const normalized = content.replace(/\s+/g, ' ').trim();
+    const truncated = normalized.length > MAX_CHARS;
+    const cleanedText = normalized.substring(0, MAX_CHARS);
 
-    sendResponse({ text: cleanedText, title: pageTitle });
+    sendResponse({
+      text: cleanedText,
+      title: pageTitle,
+      truncated,
+      originalLength: normalized.length
+    });
     return;
   }
 
