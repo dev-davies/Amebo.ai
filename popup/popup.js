@@ -15,8 +15,22 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
     if (tab) {
       pageTitleDiv.textContent = tab.title;
+
+      // Check for system pages
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://')) {
+        summarizeBtn.disabled = true;
+        summarizeBtn.textContent = 'System Page';
+        pageTitleDiv.textContent = 'Cannot summarize system pages.';
+        return;
+      }
+
       // Request text just to calculate reading time initially
       chrome.tabs.sendMessage(tab.id, { action: 'GET_TEXT' }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Content script not ready, handle silently here
+          console.warn('Content script not yet ready on this page.');
+          return;
+        }
         if (response && response.text) {
           const words = response.text.trim().split(/\s+/).length;
           const time = Math.ceil(words / 200);
@@ -37,8 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!tab) throw new Error('Active tab not found');
 
       chrome.tabs.sendMessage(tab.id, { action: 'GET_TEXT' }, (extractionResponse) => {
-        if (chrome.runtime.lastError || !extractionResponse) {
-          handleError('Could not read page content. Please refresh the page.');
+        if (chrome.runtime.lastError) {
+          handleError('Please refresh the page or try a different website.');
+          return;
+        }
+
+        if (!extractionResponse) {
+          handleError('No content received. Please refresh and try again.');
           return;
         }
 
