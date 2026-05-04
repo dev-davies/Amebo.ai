@@ -9,22 +9,36 @@
 <body>
   <div class="container">
     <header>
-      <h1>Amebo AI</h1>
+      <div class="header-top">
+        <h1 class="logo">Amebo AI</h1>
+        <div id="reading-time" class="reading-time"></div>
+      </div>
+      <div id="page-title" class="page-title">Loading page info...</div>
     </header>
+
     <main>
-      <div class="content">
-        <h2>Hello World</h2>
-        <p>Your intelligent web companion.</p>
-        <button id="summarizeBtn" class="primary-btn">Summarize</button>
-        <div id="loading" class="loading hidden">
-          <div class="spinner"></div>
-          <p>Processing with AI...</p>
+      <div id="initial-state" class="content-view">
+        <p class="description">Get a 3-point summary of any page in seconds.</p>
+        <button id="summarizeBtn" class="primary-btn">Summarize Page</button>
+      </div>
+
+      <div id="loading" class="loading-view hidden">
+        <div class="spinner"></div>
+        <p>Analyzing content...</p>
+      </div>
+
+      <div id="result-state" class="result-view hidden">
+        <div class="summary-label">Summary</div>
+        <div id="summary-output" class="summary-content"></div>
+        <div class="actions">
+          <button id="copyBtn" class="secondary-btn">Copy</button>
+          <button id="resetBtn" class="text-btn">Reset</button>
         </div>
-        <div id="summary-output" class="summary-box hidden"></div>
       </div>
     </main>
+
     <footer>
-      <p>&copy; 2026 Amebo AI</p>
+      <p>Powered by Amebo AI & Groq</p>
     </footer>
   </div>
   <script src="popup.js"></script>

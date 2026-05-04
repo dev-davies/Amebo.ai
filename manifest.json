@@ -27,6 +27,9 @@
       "js": ["scripts/content.js"]
     }
   ],
+  "host_permissions": [
+    "https://api.groq.com/*"
+  ],
   "background": {
     "service_worker": "scripts/background.js"
   }

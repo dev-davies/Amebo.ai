@@ -1,70 +1,102 @@
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Popup loaded');
-
   const summarizeBtn = document.getElementById('summarizeBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const resetBtn = document.getElementById('resetBtn');
   const loadingDiv = document.getElementById('loading');
+  const initialState = document.getElementById('initial-state');
+  const resultState = document.getElementById('result-state');
   const summaryOutput = document.getElementById('summary-output');
+  const readingTimeDiv = document.getElementById('reading-time');
+  const pageTitleDiv = document.getElementById('page-title');
 
+  let currentSummary = '';
+
+  // 1. Initial Page Info Fetch
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (tab) {
+      pageTitleDiv.textContent = tab.title;
+      // Request text just to calculate reading time initially
+      chrome.tabs.sendMessage(tab.id, { action: 'GET_TEXT' }, (response) => {
+        if (response && response.text) {
+          const words = response.text.trim().split(/\s+/).length;
+          const time = Math.ceil(words / 200);
+          readingTimeDiv.textContent = `${time} min read`;
+        }
+      });
+    }
+  });
+
+  // 2. Summarize Click
   summarizeBtn.addEventListener('click', async () => {
-    console.log('Summarize button clicked');
-    
-    // UI state: Show loading, hide button and previous output
-    summarizeBtn.classList.add('hidden');
-    summaryOutput.classList.add('hidden');
+    initialState.classList.add('hidden');
     loadingDiv.classList.remove('hidden');
-    
+    summarizeBtn.disabled = true;
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      if (!tab) {
-        throw new Error('No active tab found');
-      }
+      if (!tab) throw new Error('Active tab not found');
 
-      // 1. Get text from Content Script
       chrome.tabs.sendMessage(tab.id, { action: 'GET_TEXT' }, (extractionResponse) => {
-        if (chrome.runtime.lastError) {
-          handleError('Could not extract text. Refresh the page and try again.');
+        if (chrome.runtime.lastError || !extractionResponse) {
+          handleError('Could not read page content. Please refresh the page.');
           return;
         }
 
-        if (extractionResponse && extractionResponse.text) {
-          console.log('Text extracted, sending to background...');
-          
-          // 2. Send text to Background Script for processing
-          chrome.runtime.sendMessage(
-            { action: 'PROCESS_TEXT', text: extractionResponse.text },
-            (processingResponse) => {
-              if (chrome.runtime.lastError) {
-                handleError('AI processing failed. Please try again.');
-                return;
-              }
-
-              // 3. Display the result
-              if (processingResponse && processingResponse.summary) {
-                showSummary(processingResponse.summary);
-              }
+        chrome.runtime.sendMessage(
+          { action: 'PROCESS_TEXT', text: extractionResponse.text },
+          (processingResponse) => {
+            if (chrome.runtime.lastError || processingResponse.error) {
+              handleError(processingResponse?.error || 'AI request failed.');
+              return;
             }
-          );
-        } else {
-          handleError('No readable content found on this page.');
-        }
+
+            if (processingResponse && processingResponse.summary) {
+              displaySummary(processingResponse.summary);
+            }
+          }
+        );
       });
     } catch (error) {
       handleError(error.message);
     }
   });
 
-  function showSummary(summary) {
+  // 3. Reset Button
+  resetBtn.addEventListener('click', () => {
+    resultState.classList.add('hidden');
+    initialState.classList.remove('hidden');
+    summarizeBtn.disabled = false;
+    summaryOutput.innerHTML = '';
+    currentSummary = '';
+  });
+
+  // 4. Copy Button
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(currentSummary).then(() => {
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = originalText, 2000);
+    });
+  });
+
+  function displaySummary(markdown) {
+    currentSummary = markdown;
     loadingDiv.classList.add('hidden');
-    summarizeBtn.classList.remove('hidden');
-    summaryOutput.textContent = summary;
-    summaryOutput.classList.remove('hidden');
+    resultState.classList.remove('hidden');
+    
+    // Simple Markdown to HTML converter for bullet points
+    // Replaces lines starting with - or * with <li> tags wrapped in <ul>
+    const htmlContent = markdown
+      .replace(/^\s*[-*]\s+(.*)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    
+    summaryOutput.innerHTML = htmlContent;
   }
 
   function handleError(message) {
-    console.error(message);
     loadingDiv.classList.add('hidden');
-    summarizeBtn.classList.remove('hidden');
+    initialState.classList.remove('hidden');
+    summarizeBtn.disabled = false;
     alert(message);
   }
 });
