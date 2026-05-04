@@ -18,7 +18,15 @@
 
     <main>
       <div id="initial-state" class="content-view">
-        <p class="description">Get a 3-point summary of any page in seconds.</p>
+        <p class="description">Get a structured summary of any page in seconds.</p>
+        <div class="length-row">
+          <label for="lengthSelect" class="length-label">Length</label>
+          <select id="lengthSelect" class="length-select" aria-label="Summary length">
+            <option value="3">3 bullets</option>
+            <option value="5" selected>5 bullets</option>
+            <option value="detailed">Detailed</option>
+          </select>
+        </div>
         <button id="summarizeBtn" class="primary-btn">Summarize Page</button>
       </div>
 
@@ -34,7 +42,12 @@
         <div id="summary-output" class="summary-content">
           <p class="placeholder-text">Click the button above to generate your 3-point summary!</p>
         </div>
+        <div id="result-meta" class="result-meta hidden">
+          <span id="word-count" class="meta-chip"></span>
+          <span id="reading-time-body" class="meta-chip"></span>
+        </div>
         <div id="result-actions" class="actions hidden">
+          <button id="highlightBtn" class="secondary-btn">Highlight</button>
           <button id="copyBtn" class="secondary-btn">Copy</button>
           <button id="resetBtn" class="text-btn">Reset</button>
         </div>

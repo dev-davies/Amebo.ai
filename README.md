@@ -76,4 +76,4 @@ amebo-ai/
 ---
 
 ### :shield: Security Note
-*No API keys are included in this repository. All AI processing is handled via the Vercel Proxy endpoint at `[https://ai-summarizer-proxy-ebon.vercel.app/api/summarize](https://ai-summarizer-proxy-ebon.vercel.app/api/summarize)`.*
+*No API keys are included in this repository. All AI processing is handled via the Vercel Proxy endpoint at <https://ai-summarizer-proxy-ebon.vercel.app/api/summarize>.*

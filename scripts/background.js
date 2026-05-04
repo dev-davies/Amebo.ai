@@ -1,43 +1,35 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'PROCESS_TEXT') {
-    console.log('Background script processing text with Vercel AI Proxy...');
-
-    summarizeText(request.text)
-      .then(summary => sendResponse({ summary }))
+    summarizeText(request.text, request.length || '5')
+      .then(result => sendResponse(result))
       .catch(error => sendResponse({ error: error.message }));
 
-    return true; // Keep the message channel open for async response
+    return true; // keep channel open for async response
   }
 });
 
-async function summarizeText(text) {
+async function summarizeText(text, length) {
   const ENDPOINT = 'https://ai-summarizer-proxy-ebon.vercel.app/api/summarize';
 
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ text })
-    });
+  const response = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, length })
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Proxy API Error:', errorData);
-
-      if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again in a moment.');
-      } else {
-        throw new Error(errorData.error || `Proxy request failed with status ${response.status}`);
-      }
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error('Rate limit exceeded. Please try again in a moment.');
     }
-
-    const data = await response.json();
-    return data.summary;
-
-  } catch (error) {
-    console.error('Fetch Error:', error);
-    throw error;
+    throw new Error(errorData.error || `Proxy request failed (${response.status}).`);
   }
+
+  const data = await response.json();
+  // Normalize: proxy may return { summary } or { summary, insights, highlights }
+  return {
+    summary: data.summary || '',
+    insights: Array.isArray(data.insights) ? data.insights : [],
+    highlights: Array.isArray(data.highlights) ? data.highlights : []
+  };
 }

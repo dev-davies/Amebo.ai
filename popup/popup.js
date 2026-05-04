@@ -2,23 +2,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const summarizeBtn = document.getElementById('summarizeBtn');
   const copyBtn = document.getElementById('copyBtn');
   const resetBtn = document.getElementById('resetBtn');
+  const highlightBtn = document.getElementById('highlightBtn');
+  const lengthSelect = document.getElementById('lengthSelect');
   const loadingDiv = document.getElementById('loading');
   const resultActions = document.getElementById('result-actions');
+  const resultMeta = document.getElementById('result-meta');
+  const wordCountEl = document.getElementById('word-count');
+  const readingTimeBodyEl = document.getElementById('reading-time-body');
   const summaryOutput = document.getElementById('summary-output');
   const readingTimeDiv = document.getElementById('reading-time');
   const pageTitleDiv = document.getElementById('page-title');
   const errorBanner = document.getElementById('error-banner');
 
-  const PLACEHOLDER_HTML = 'Click the button above to generate your 3-point summary!';
-  let currentSummary = '';
+  const PLACEHOLDER_TEXT = 'Click the button above to generate your summary!';
+  let currentPayload = null; // { summary, insights, highlights, words }
   let currentTabId = null;
   let currentUrl = null;
+  let highlighted = false;
 
   function showError(message) {
     errorBanner.textContent = message;
     errorBanner.classList.remove('hidden');
   }
-
   function clearError() {
     errorBanner.textContent = '';
     errorBanner.classList.add('hidden');
@@ -28,39 +33,65 @@ document.addEventListener('DOMContentLoaded', () => {
     summaryOutput.replaceChildren();
     const p = document.createElement('p');
     p.className = 'placeholder-text';
-    p.textContent = PLACEHOLDER_HTML;
+    p.textContent = PLACEHOLDER_TEXT;
     summaryOutput.appendChild(p);
   }
 
-  function renderSummary(markdown) {
-    currentSummary = markdown;
-    summaryOutput.replaceChildren();
-
-    const lines = markdown.split('\n').map(l => l.trim()).filter(Boolean);
+  function appendSection(title, items) {
+    if (!items || !items.length) return;
+    const h = document.createElement('div');
+    h.className = 'section-heading';
+    h.textContent = title;
+    summaryOutput.appendChild(h);
     const ul = document.createElement('ul');
-    let hasBullet = false;
-
-    for (const line of lines) {
-      const bullet = line.match(/^[-*]\s+(.*)$/);
-      if (bullet) {
-        const li = document.createElement('li');
-        li.textContent = bullet[1];
-        ul.appendChild(li);
-        hasBullet = true;
-      } else {
-        const p = document.createElement('p');
-        p.textContent = line;
-        summaryOutput.appendChild(p);
-      }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.textContent = item;
+      ul.appendChild(li);
     }
-
-    if (hasBullet) summaryOutput.appendChild(ul);
+    summaryOutput.appendChild(ul);
   }
 
-  // Send message to content script, injecting it on-demand if not yet loaded
-  async function requestPageText(tabId) {
+  function parseBullets(markdown) {
+    return markdown
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => l.match(/^[-*]\s+(.*)$/))
+      .filter(Boolean)
+      .map(m => m[1]);
+  }
+
+  function renderPayload(payload) {
+    summaryOutput.replaceChildren();
+
+    const bullets = payload.summary ? parseBullets(payload.summary) : [];
+    if (bullets.length) {
+      appendSection('Summary', bullets);
+    } else if (payload.summary) {
+      const p = document.createElement('p');
+      p.textContent = payload.summary;
+      summaryOutput.appendChild(p);
+    }
+
+    appendSection('Key Insights', payload.insights);
+  }
+
+  function updateMeta(words) {
+    if (!words) {
+      resultMeta.classList.add('hidden');
+      return;
+    }
+    const minutes = Math.max(1, Math.ceil(words / 200));
+    wordCountEl.textContent = `${words.toLocaleString()} words`;
+    readingTimeBodyEl.textContent = `${minutes} min read`;
+    resultMeta.classList.remove('hidden');
+  }
+
+  // Send message to content script, injecting it on-demand if needed
+  async function sendToContent(tabId, message) {
     const send = () => new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabId, { action: 'GET_TEXT' }, (response) => {
+      chrome.tabs.sendMessage(tabId, message, (response) => {
         const err = chrome.runtime.lastError;
         if (err) reject(err);
         else resolve(response);
@@ -70,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       return await send();
     } catch (_) {
-      // Content script not yet injected — inject and retry once.
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ['scripts/content.js']
@@ -79,50 +109,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function processSummary(text) {
+  function processSummary(text, length) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { action: 'PROCESS_TEXT', text },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          if (!response) {
-            reject(new Error('No response from background.'));
-            return;
-          }
-          if (response.error) {
-            reject(new Error(response.error));
-            return;
-          }
-          resolve(response.summary);
+      chrome.runtime.sendMessage({ action: 'PROCESS_TEXT', text, length }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
         }
-      );
+        if (!response) {
+          reject(new Error('No response from background.'));
+          return;
+        }
+        if (response.error) {
+          reject(new Error(response.error));
+          return;
+        }
+        resolve(response);
+      });
     });
   }
 
-  function cacheKey(url) {
-    return `summary:${url}`;
-  }
-
-  async function getCached(url) {
-    const key = cacheKey(url);
+  const cacheKey = (url, length) => `summary:${length}:${url}`;
+  async function getCached(url, length) {
+    const key = cacheKey(url, length);
     const data = await chrome.storage.local.get(key);
     return data[key];
   }
-
-  async function setCached(url, summary) {
+  async function setCached(url, length, payload) {
     await chrome.storage.local.set({
-      [cacheKey(url)]: { summary, ts: Date.now() }
+      [cacheKey(url, length)]: { ...payload, ts: Date.now() }
     });
   }
-
-  async function clearCached(url) {
-    await chrome.storage.local.remove(cacheKey(url));
+  async function clearCachedAll(url) {
+    const all = await chrome.storage.local.get(null);
+    const toRemove = Object.keys(all).filter(k => k.startsWith('summary:') && k.endsWith(`:${url}`));
+    if (toRemove.length) await chrome.storage.local.remove(toRemove);
   }
 
-  // 1. Initial Page Info Fetch
+  // Init
   (async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) return;
@@ -138,59 +162,89 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Show cached summary if present
+    // Reading time + word count (best-effort)
     try {
-      const cached = await getCached(tab.url);
-      if (cached && cached.summary) {
-        renderSummary(cached.summary);
-        resultActions.classList.remove('hidden');
-      }
-    } catch (_) { /* ignore cache errors */ }
-
-    // Reading time (best-effort)
-    try {
-      const response = await requestPageText(tab.id);
+      const response = await sendToContent(tab.id, { action: 'GET_TEXT' });
       if (response && response.text) {
         const words = response.text.trim().split(/\s+/).length;
         const time = Math.max(1, Math.ceil(words / 200));
         readingTimeDiv.textContent = `${time} min read`;
       }
-    } catch (_) {
-      // silent — reading time is optional
-    }
+    } catch (_) { /* silent */ }
+
+    // Show cached summary for current length if present
+    try {
+      const cached = await getCached(tab.url, lengthSelect.value);
+      if (cached && cached.summary) {
+        currentPayload = cached;
+        renderPayload(cached);
+        updateMeta(cached.words);
+        resultActions.classList.remove('hidden');
+      }
+    } catch (_) { /* ignore */ }
   })();
 
-  // 2. Summarize click
+  // Re-render from cache when length changes
+  lengthSelect.addEventListener('change', async () => {
+    if (!currentUrl) return;
+    try {
+      const cached = await getCached(currentUrl, lengthSelect.value);
+      if (cached && cached.summary) {
+        currentPayload = cached;
+        renderPayload(cached);
+        updateMeta(cached.words);
+        resultActions.classList.remove('hidden');
+      } else {
+        currentPayload = null;
+        resetPlaceholder();
+        resultActions.classList.add('hidden');
+        resultMeta.classList.add('hidden');
+      }
+    } catch (_) { /* ignore */ }
+  });
+
+  // Summarize
   summarizeBtn.addEventListener('click', async () => {
     clearError();
     summarizeBtn.disabled = true;
     summaryOutput.replaceChildren();
     loadingDiv.classList.remove('hidden');
     resultActions.classList.add('hidden');
+    resultMeta.classList.add('hidden');
+
+    const length = lengthSelect.value;
 
     try {
       if (!currentTabId) throw new Error('Active tab not found.');
 
-      // Cache check (avoids duplicate API calls)
-      const cached = await getCached(currentUrl);
+      const cached = await getCached(currentUrl, length);
       if (cached && cached.summary) {
-        renderSummary(cached.summary);
-        loadingDiv.classList.add('hidden');
+        currentPayload = cached;
+        renderPayload(cached);
+        updateMeta(cached.words);
         resultActions.classList.remove('hidden');
-        summarizeBtn.disabled = false;
         return;
       }
 
-      const extraction = await requestPageText(currentTabId);
+      const extraction = await sendToContent(currentTabId, { action: 'GET_TEXT' });
       if (!extraction || !extraction.text) {
         throw new Error('No content received. Please refresh and try again.');
       }
 
-      const summary = await processSummary(extraction.text);
-      if (!summary) throw new Error('AI returned an empty summary.');
+      const words = extraction.text.trim().split(/\s+/).length;
+      const result = await processSummary(extraction.text, length);
+      if (!result || !result.summary) throw new Error('AI returned an empty summary.');
 
-      await setCached(currentUrl, summary);
-      renderSummary(summary);
+      const payload = {
+        summary: result.summary,
+        insights: result.insights || [],
+        highlights: result.highlights || [],
+        words
+      };
+      currentPayload = payload;
+      await setCached(currentUrl, length, payload);
+      renderPayload(payload);
+      updateMeta(words);
       resultActions.classList.remove('hidden');
     } catch (error) {
       resetPlaceholder();
@@ -201,25 +255,67 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 3. Reset button
+  // Reset
   resetBtn.addEventListener('click', async () => {
     clearError();
     resultActions.classList.add('hidden');
+    resultMeta.classList.add('hidden');
     summarizeBtn.disabled = false;
-    currentSummary = '';
+    currentPayload = null;
     resetPlaceholder();
+    if (currentTabId && highlighted) {
+      try { await sendToContent(currentTabId, { action: 'CLEAR_HIGHLIGHTS' }); } catch (_) {}
+      highlighted = false;
+      highlightBtn.textContent = 'Highlight';
+    }
     if (currentUrl) {
-      try { await clearCached(currentUrl); } catch (_) { /* ignore */ }
+      try { await clearCachedAll(currentUrl); } catch (_) {}
     }
   });
 
-  // 4. Copy button
+  // Copy — flatten payload to readable text
   copyBtn.addEventListener('click', () => {
-    if (!currentSummary) return;
-    navigator.clipboard.writeText(currentSummary).then(() => {
-      const originalText = copyBtn.textContent;
+    if (!currentPayload) return;
+    const parts = [];
+    if (currentPayload.summary) parts.push(currentPayload.summary);
+    if (currentPayload.insights && currentPayload.insights.length) {
+      parts.push('Key Insights:');
+      parts.push(currentPayload.insights.map(i => `- ${i}`).join('\n'));
+    }
+    const text = parts.join('\n\n');
+    navigator.clipboard.writeText(text).then(() => {
+      const original = copyBtn.textContent;
       copyBtn.textContent = 'Copied!';
-      setTimeout(() => copyBtn.textContent = originalText, 2000);
+      setTimeout(() => copyBtn.textContent = original, 2000);
     }).catch(() => showError('Could not copy to clipboard.'));
+  });
+
+  // Highlight — toggle
+  highlightBtn.addEventListener('click', async () => {
+    if (!currentTabId || !currentPayload) return;
+    try {
+      if (highlighted) {
+        await sendToContent(currentTabId, { action: 'CLEAR_HIGHLIGHTS' });
+        highlighted = false;
+        highlightBtn.textContent = 'Highlight';
+        return;
+      }
+      const phrases = (currentPayload.highlights && currentPayload.highlights.length)
+        ? currentPayload.highlights
+        : (currentPayload.insights || []);
+      if (!phrases.length) {
+        showError('No highlight phrases available for this summary.');
+        return;
+      }
+      const res = await sendToContent(currentTabId, { action: 'HIGHLIGHT', phrases });
+      if (res && res.ok) {
+        highlighted = true;
+        highlightBtn.textContent = 'Clear';
+      } else {
+        showError('Could not highlight on this page.');
+      }
+    } catch (e) {
+      showError(e.message || 'Highlight failed.');
+    }
   });
 });

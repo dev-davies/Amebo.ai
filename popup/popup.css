@@ -223,3 +223,61 @@ footer p {
   font-size: 0.85rem;
   line-height: 1.4;
 }
+
+.length-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.length-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.length-select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: white;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.result-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--secondary-bg);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.section-heading {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin: 12px 0 6px;
+}
+
+.section-heading:first-child { margin-top: 0; }
+
+button:focus-visible,
+.length-select:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
