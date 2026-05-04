@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       content = document.body.innerText;
     }
 
-    const MAX_CHARS = 10000;
+    const MAX_CHARS = 50000;
     const normalized = content.replace(/\s+/g, ' ').trim();
     const truncated = normalized.length > MAX_CHARS;
     const cleanedText = normalized.substring(0, MAX_CHARS);

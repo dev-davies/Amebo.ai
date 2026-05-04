@@ -254,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (extraction.truncated) {
         const original = extraction.originalLength || 0;
-        showWarning(`Page is long (${original.toLocaleString()} chars) — only the first 10,000 were sent for summarization.`);
+        showWarning(`Page is long (${original.toLocaleString()} chars) — only the first 50,000 were sent for summarization.`);
       }
 
       const words = extraction.text.trim().split(/\s+/).length;
