@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyBtn = document.getElementById('copyBtn');
   const resetBtn = document.getElementById('resetBtn');
   const highlightBtn = document.getElementById('highlightBtn');
-  const lengthSelect = document.getElementById('lengthSelect');
+  const SUMMARY_LENGTH = '3';
   const loadingDiv = document.getElementById('loading');
   const resultActions = document.getElementById('result-actions');
   const resultMeta = document.getElementById('result-meta');
@@ -202,9 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (_) { /* silent */ }
 
-    // Show cached summary for current length if present
+    // Show cached summary if present
     try {
-      const cached = await getCached(tab.url, lengthSelect.value);
+      const cached = await getCached(tab.url, SUMMARY_LENGTH);
       if (cached && cached.summary) {
         currentPayload = cached;
         renderPayload(cached);
@@ -213,25 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (_) { /* ignore */ }
   })();
-
-  // Re-render from cache when length changes
-  lengthSelect.addEventListener('change', async () => {
-    if (!currentUrl) return;
-    try {
-      const cached = await getCached(currentUrl, lengthSelect.value);
-      if (cached && cached.summary) {
-        currentPayload = cached;
-        renderPayload(cached);
-        updateMeta(cached.words);
-        resultActions.classList.remove('hidden');
-      } else {
-        currentPayload = null;
-        resetPlaceholder();
-        resultActions.classList.add('hidden');
-        resultMeta.classList.add('hidden');
-      }
-    } catch (_) { /* ignore */ }
-  });
 
   // Summarize
   summarizeBtn.addEventListener('click', async () => {
@@ -243,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultActions.classList.add('hidden');
     resultMeta.classList.add('hidden');
 
-    const length = lengthSelect.value;
+    const length = SUMMARY_LENGTH;
 
     try {
       if (!currentTabId) throw new Error('Active tab not found.');
