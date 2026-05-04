@@ -27,3 +27,6 @@ desktop.ini
 dist/
 build/
 *.zip
+
+# Internal docs
+API_SETUP.md

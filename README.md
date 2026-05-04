@@ -30,7 +30,7 @@ To comply with the security requirement of **never exposing API keys in the fron
 
 *   **Secure API Calls**: The extension calls a custom endpoint (`/api/summarize`) rather than the Groq API directly.
 *   **Environment Variables**: The Groq API key is stored securely in Vercel’s environment variables. It is never committed to GitHub or bundled in the extension's source code.
-*   **CORS Protection**: The proxy is configured with specific headers to allow requests only from authorized contexts.
+*   **Zero-Setup for Reviewers**: The proxy accepts requests from any origin so the extension works out of the box without configuring an extension ID or deploying your own backend.
 
 ### Model Choice
 *   **Model**: `llama-3.3-70b-versatile` via Groq.
