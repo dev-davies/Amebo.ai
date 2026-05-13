@@ -4,23 +4,12 @@ const HIGHLIGHT_STYLE_ID = 'amebo-ai-highlight-style';
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'GET_TEXT') {
     const pageTitle = document.title;
-    let content = '';
+    const content = extractMainContent();
 
-    const article = document.querySelector('article');
-    const main = document.querySelector('main');
-
-    if (article) {
-      content = article.innerText;
-    } else if (main) {
-      content = main.innerText;
-    } else {
-      content = document.body.innerText;
-    }
-
-    const MAX_CHARS = 50000;
+    const MAX_CHARS = 200000;
     const normalized = content.replace(/\s+/g, ' ').trim();
     const truncated = normalized.length > MAX_CHARS;
-    const cleanedText = normalized.substring(0, MAX_CHARS);
+    const cleanedText = truncated ? truncateAtSentence(normalized, MAX_CHARS) : normalized;
 
     sendResponse({
       text: cleanedText,
@@ -55,6 +44,86 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
 });
+
+const NOISE_SELECTOR = [
+  'nav', 'aside', 'footer', 'header',
+  'form', 'script', 'style', 'noscript', 'template', 'iframe',
+  '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+  '[role="complementary"]', '[role="search"]', '[aria-hidden="true"]',
+  '.nav', '.navbar', '.menu', '.sidebar', '.footer', '.header',
+  '.comments', '#comments', '.comment', '.social', '.share',
+  '.related', '.recommended', '.advert', '.ad', '.ads', '.promo',
+  '.cookie', '.newsletter', '.subscribe', '.popup', '.modal'
+].join(',');
+
+function visibleText(el) {
+  if (!el) return '';
+  const text = el.innerText || '';
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function linkDensity(el) {
+  const total = (el.innerText || '').length;
+  if (!total) return 1;
+  let linkLen = 0;
+  el.querySelectorAll('a').forEach(a => { linkLen += (a.innerText || '').length; });
+  return linkLen / total;
+}
+
+function scoreCandidate(el) {
+  const text = visibleText(el);
+  if (text.length < 250) return -Infinity;
+  const density = linkDensity(el);
+  if (density > 0.5) return -Infinity;
+  const paragraphs = el.querySelectorAll('p').length;
+  return text.length * (1 - density) + paragraphs * 80;
+}
+
+function extractMainContent() {
+  const clone = document.body ? document.body.cloneNode(true) : null;
+  if (!clone) return '';
+  clone.querySelectorAll(NOISE_SELECTOR).forEach(n => n.remove());
+
+  const selectors = [
+    'article',
+    '[role="main"]',
+    'main',
+    '[itemprop="articleBody"]',
+    '.post-content', '.entry-content', '.article-content', '.story-body',
+    '#content', '#main-content'
+  ];
+
+  let best = null;
+  let bestScore = -Infinity;
+  for (const sel of selectors) {
+    clone.querySelectorAll(sel).forEach(el => {
+      const s = scoreCandidate(el);
+      if (s > bestScore) { bestScore = s; best = el; }
+    });
+  }
+
+  if (!best) {
+    clone.querySelectorAll('div, section').forEach(el => {
+      const s = scoreCandidate(el);
+      if (s > bestScore) { bestScore = s; best = el; }
+    });
+  }
+
+  const chosen = best || clone;
+  return (chosen.innerText || '').trim();
+}
+
+function truncateAtSentence(text, max) {
+  if (text.length <= max) return text;
+  const slice = text.slice(0, max);
+  const lastEnd = Math.max(
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('! '),
+    slice.lastIndexOf('? ')
+  );
+  if (lastEnd > max * 0.7) return slice.slice(0, lastEnd + 1);
+  return slice;
+}
 
 function injectHighlightStyle() {
   if (document.getElementById(HIGHLIGHT_STYLE_ID)) return;

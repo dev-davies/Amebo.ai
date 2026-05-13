@@ -65,9 +65,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function cleanBullet(s) {
     return String(s)
-      .replace(/^[\s\u2022•*\-]+/, '')
+      .replace(/^[\s\u2022\u2023\u25E6\u2043\u2219•*\-\u2013\u2014]+/, '')
       .replace(/^\d+[\.\):\-]\s*/, '')
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/(^|[^*])\*(?!\*)([^*]+)\*/g, '$1$2')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function wordCount(s) {
+    return s.split(/\s+/).filter(Boolean).length;
+  }
+
+  function splitSentences(s) {
+    return s
+      .split(/(?<=[.!?])\s+(?=[A-Z0-9"'\u201C\u2018])/)
+      .map(p => p.trim())
+      .filter(Boolean);
   }
 
   function toBullets(value) {
@@ -76,10 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
       return value.flatMap(toBullets);
     }
     if (typeof value !== 'string') return [];
-    const lines = value.split(/\n+/).map(l => l.trim()).filter(Boolean);
-    const marked = lines.filter(l => /^([-*•]|\d+[\.\):\-])\s+/.test(l));
-    const source = marked.length ? marked : lines;
-    return source.map(cleanBullet).filter(Boolean);
+
+    const lines = value.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+    const marked = lines.filter(l => /^([-*•\u2013\u2014]|\d+[\.\):\-])\s+/.test(l));
+
+    let candidates;
+    if (marked.length >= 2) {
+      candidates = marked;
+    } else if (lines.length >= 2) {
+      candidates = lines;
+    } else {
+      candidates = splitSentences(lines.join(' '));
+    }
+
+    return candidates
+      .map(cleanBullet)
+      .filter(b => b && wordCount(b) >= 4);
   }
 
   function renderPayload(payload) {
@@ -90,11 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
       appendSection('Summary', bullets);
     } else if (typeof payload.summary === 'string' && payload.summary.trim()) {
       const p = document.createElement('p');
-      p.textContent = payload.summary;
+      p.textContent = cleanBullet(payload.summary);
       summaryOutput.appendChild(p);
     }
 
-    appendSection('Key Insights', payload.insights);
+    appendSection('Key Insights', toBullets(payload.insights));
   }
 
   function updateMeta(words) {
@@ -254,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (extraction.truncated) {
         const original = extraction.originalLength || 0;
-        showWarning(`Page is long (${original.toLocaleString()} chars) — only the first 50,000 were sent for summarization.`);
+        showWarning(`Page is very long (${original.toLocaleString()} chars) — summarizing the first 200,000 in chunks.`);
       }
 
       const words = extraction.text.trim().split(/\s+/).length;
