@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyBtn = document.getElementById('copyBtn');
   const resetBtn = document.getElementById('resetBtn');
   const highlightBtn = document.getElementById('highlightBtn');
-  const SUMMARY_LENGTH = '3';
+  const lengthSelect = document.getElementById('lengthSelect');
   const loadingDiv = document.getElementById('loading');
   const resultActions = document.getElementById('result-actions');
   const resultMeta = document.getElementById('result-meta');
@@ -240,9 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (_) { /* silent */ }
 
-    // Show cached summary if present
+    // Show cached summary if present (for the current length setting)
     try {
-      const cached = await getCached(tab.url, SUMMARY_LENGTH);
+      const cached = await getCached(tab.url, lengthSelect.value);
       if (cached && cached.summary) {
         currentPayload = cached;
         renderPayload(cached);
@@ -251,6 +251,27 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (_) { /* ignore */ }
   })();
+
+  // Swap to cached payload when length changes (if available)
+  lengthSelect.addEventListener('change', async () => {
+    if (!currentUrl) return;
+    clearError();
+    clearWarning();
+    try {
+      const cached = await getCached(currentUrl, lengthSelect.value);
+      if (cached && cached.summary) {
+        currentPayload = cached;
+        renderPayload(cached);
+        updateMeta(cached.words);
+        resultActions.classList.remove('hidden');
+      } else {
+        currentPayload = null;
+        resetPlaceholder();
+        resultActions.classList.add('hidden');
+        resultMeta.classList.add('hidden');
+      }
+    } catch (_) { /* ignore */ }
+  });
 
   // Summarize
   summarizeBtn.addEventListener('click', async () => {
@@ -262,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resultActions.classList.add('hidden');
     resultMeta.classList.add('hidden');
 
-    const length = SUMMARY_LENGTH;
+    const length = lengthSelect.value;
 
     try {
       if (!currentTabId) throw new Error('Active tab not found.');

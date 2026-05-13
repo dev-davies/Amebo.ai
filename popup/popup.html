@@ -19,6 +19,14 @@
     <main>
       <div id="initial-state" class="content-view">
         <p class="description">Get a structured summary of any page in seconds.</p>
+        <div class="length-row">
+          <label for="lengthSelect" class="length-label">Length</label>
+          <select id="lengthSelect" class="length-select">
+            <option value="3">3-bullet summary</option>
+            <option value="5" selected>5-bullet summary</option>
+            <option value="extended">Extended summary</option>
+          </select>
+        </div>
         <button id="summarizeBtn" class="primary-btn">Summarize Page</button>
       </div>
 
@@ -33,7 +41,7 @@
       <div id="result-state" class="result-view">
         <div class="summary-label">Summary</div>
         <div id="summary-output" class="summary-content">
-          <p class="placeholder-text">Click the button above to generate your 3-point summary!</p>
+          <p class="placeholder-text">Click the button above to generate your summary!</p>
         </div>
         <div id="result-meta" class="result-meta hidden">
           <span id="word-count" class="meta-chip"></span>

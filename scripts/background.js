@@ -1,6 +1,7 @@
 const ENDPOINT = 'https://ai-summarizer-proxy-alpha.vercel.app/api/summarize';
-const CHUNK_CHARS = 12000;
-const MAX_CHUNKS = 8;
+const CHUNK_CHARS = 18000;
+const MAX_CHUNKS = 6;
+const RETRY_DELAYS_MS = [800, 1800];
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'PROCESS_TEXT') {
@@ -12,7 +13,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-async function callProxy(text, length) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function callProxyOnce(text, length) {
   const response = await fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,10 +24,11 @@ async function callProxy(text, length) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again in a moment.');
-    }
-    throw new Error(errorData.error || `Proxy request failed (${response.status}).`);
+    const message = errorData.error || `Proxy request failed (${response.status}).`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.retryable = response.status === 429 || response.status >= 500;
+    throw err;
   }
 
   const data = await response.json();
@@ -33,6 +37,23 @@ async function callProxy(text, length) {
     insights: Array.isArray(data.insights) ? data.insights : [],
     highlights: Array.isArray(data.highlights) ? data.highlights : []
   };
+}
+
+async function callProxy(text, length) {
+  let lastErr;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await callProxyOnce(text, length);
+    } catch (err) {
+      lastErr = err;
+      if (!err.retryable || attempt === RETRY_DELAYS_MS.length) break;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  if (lastErr && lastErr.status === 429) {
+    throw new Error('Rate limit exceeded. Please try again in a moment.');
+  }
+  throw lastErr;
 }
 
 function chunkText(text, size) {
@@ -77,7 +98,16 @@ async function summarizeText(text, length) {
   }
 
   const chunks = chunkText(text, CHUNK_CHARS);
-  const partials = await Promise.all(chunks.map(c => callProxy(c, length)));
+  const partials = [];
+  let failures = 0;
+  for (const chunk of chunks) {
+    try {
+      partials.push(await callProxy(chunk, length));
+    } catch (err) {
+      failures++;
+      if (failures >= chunks.length) throw err;
+    }
+  }
 
   const summaryParts = partials.map(p => p.summary).filter(Boolean);
   const allInsights = dedupeStrings(partials.flatMap(p => p.insights));
@@ -85,6 +115,14 @@ async function summarizeText(text, length) {
 
   if (!summaryParts.length) {
     throw new Error('AI returned an empty summary.');
+  }
+
+  if (summaryParts.length === 1) {
+    return {
+      summary: summaryParts[0],
+      insights: allInsights.slice(0, 8),
+      highlights: allHighlights.slice(0, 12)
+    };
   }
 
   const merged = await callProxy(summaryParts.join('\n\n'), length).catch(() => null);
